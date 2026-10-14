@@ -27,15 +27,9 @@ const DOCUMENT_TYPES = [
   OTHER_DOCUMENTS,
 ];
 
-// Task flow for the intern: Pending -> In Progress -> Completed -> Submitted.
-// "Completed" means the intern finished the work; the project is then uploaded
-// via submitTask, which moves the task to "Submitted". Once a task is
-// Submitted, only the mentor/HR can change it further.
-const EDITABLE_TASK_STATUSES = ["Pending", "In Progress", "Completed", "Changes Requested"];
-// Statuses the intern may pick from the dropdown ("Submitted" is only ever set by submitTask).
-const INTERN_SETTABLE_TASK_STATUSES = ["Pending", "In Progress", "Completed"];
-// A project can only be submitted once the work is Completed (or the mentor asked for changes).
-const SUBMITTABLE_TASK_STATUSES = ["Completed", "Changes Requested"];
+// Statuses a task can move out of when the intern acts on it. Once a task
+// is Submitted or Completed, only the mentor/HR can change it further.
+const EDITABLE_TASK_STATUSES = ["Pending", "In Progress", "Changes Requested"];
 
 /* ------------------------------------------------------------------ */
 /* helpers                                                             */
@@ -658,7 +652,12 @@ export const startTask = async (req, res) => {
   }
 };
 
-// PATCH /api/intern-portal/tasks/:id/status   body: { status }
+// Statuses an intern may set by hand. "Submitted" only happens through
+// submitTask (it needs a file); "Changes Requested" / "Completed" are set by
+// the mentor.
+const SELF_SETTABLE_TASK_STATUSES = ["Pending", "In Progress"];
+
+// PATCH /api/intern-portal/tasks/:id/status   body: { status: "Pending" | "In Progress" }
 export const updateTaskStatus = async (req, res) => {
   try {
     const intern = await loadSelf(req.user.employee_id);
@@ -670,11 +669,10 @@ export const updateTaskStatus = async (req, res) => {
     const taskId = parseId(req.params.id);
     if (!taskId) return res.status(400).json({ message: "Invalid task id." });
 
-    const status = req.body?.status;
-
-    if (!INTERN_SETTABLE_TASK_STATUSES.includes(status)) {
+    const nextStatus = req.body?.status;
+    if (!SELF_SETTABLE_TASK_STATUSES.includes(nextStatus)) {
       return res.status(400).json({
-        message: `Status must be one of: ${INTERN_SETTABLE_TASK_STATUSES.join(", ")}.`,
+        message: `Status must be one of: ${SELF_SETTABLE_TASK_STATUSES.join(", ")}.`,
       });
     }
 
@@ -687,14 +685,18 @@ export const updateTaskStatus = async (req, res) => {
       });
     }
 
+    if (task.status === nextStatus) {
+      return res.json({ message: `Task is already ${nextStatus}.`, status: nextStatus });
+    }
+
     const { error } = await supabase
       .from("intern_tasks")
-      .update({ status, updated_at: new Date().toISOString() })
+      .update({ status: nextStatus, updated_at: new Date().toISOString() })
       .eq("id", taskId);
 
     if (error) throw error;
 
-    res.json({ message: `Task marked as ${status}.`, status });
+    res.json({ message: `Task marked as ${nextStatus}.`, status: nextStatus });
   } catch (err) {
     handleError(res, err, "updateTaskStatus");
   }
@@ -717,12 +719,6 @@ export const submitTask = async (req, res) => {
 
     if (!EDITABLE_TASK_STATUSES.includes(task.status)) {
       return res.status(400).json({ message: "This task has already been submitted." });
-    }
-
-    if (!SUBMITTABLE_TASK_STATUSES.includes(task.status)) {
-      return res.status(400).json({
-        message: "Mark the task as Completed before submitting your project.",
-      });
     }
 
     if (!req.file) {
@@ -827,7 +823,16 @@ export const getStipends = async (req, res) => {
 
     if (error) throw error;
 
-    res.json(buildStipendSchedule(intern, paidRows));
+    // The slip modal / PDF needs who the slip is for, not just the month rows.
+    const schedule = buildStipendSchedule(intern, paidRows).map((row) => ({
+      ...row,
+      intern_name: intern.full_name,
+      intern_code: intern.intern_code,
+      department_name: intern.department_name,
+      designation: intern.designation,
+    }));
+
+    res.json(schedule);
   } catch (err) {
     handleError(res, err, "getStipends");
   }

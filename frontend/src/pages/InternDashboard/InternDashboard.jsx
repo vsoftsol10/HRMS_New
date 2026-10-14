@@ -67,7 +67,7 @@ export default function InternDashboard() {
   const firstName = (data.full_name || "").split(" ")[0];
   const hour = new Date().getHours();
   const greeting =
-    hour < 12 ? "Good Morning" : hour < 17 ? "Good Afternoon" : "Good Evening";
+    hour < 12 ? "Good Morning" : hour < 16 ? "Good Afternoon" : "Good Evening";
 
   const stats = data.stats || {};
   const recentActivity = data.recent_activity || [];
