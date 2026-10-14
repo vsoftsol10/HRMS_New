@@ -1,0 +1,571 @@
+// ==========================================================================
+// HRMS - Prisma Schema (reconstructed to fit existing project code)
+// ==========================================================================
+//
+// IMPORTANT NOTES BEFORE YOU RUN THIS:
+//
+// 1. This schema was built by reading every controller + frontend form in
+//    the project (not by inspecting the live database), so it should match
+//    the columns the code actually uses. A few things I could NOT confirm
+//    from code alone are marked with "// CHECK:" comments below — please
+//    verify these against the old Supabase project (Table Editor) before
+//    running migrations, since they change the actual SQL generated:
+//      - Primary key type (assumed autoincrement Int / bigserial).
+//        Supabase projects created via the dashboard often default to
+//        `int8 identity` or `uuid`. If your old tables use `uuid`, replace
+//        every `Int @id @default(autoincrement())` with
+//        `String @id @default(uuid()) @db.Uuid`.
+//      - `announcements.posted_by` -> the controller joins announcements
+//        to employees by employee_code (not employees.id), so I modeled
+//        it as a relation on employee_code. Confirm this is really how
+//        the FK was set up in the old DB.
+//      - created_at / updated_at columns: added the ones actually
+//        referenced in code; there may be a few more that exist in the DB
+//        but are never touched by the backend.
+//
+// 2. Field names are kept in snake_case to exactly match what
+//    supabase-js currently returns/sends (`employee_code`, `first_name`,
+//    etc.), so you can migrate controllers to Prisma one-by-one without
+//    renaming keys used across the frontend `services/*.js` files.
+//
+// 3. After creating the new Supabase project and setting DATABASE_URL /
+//    DIRECT_URL, run:
+//        npx prisma migrate dev --name init
+//    This will CREATE these tables fresh in the new (empty) database.
+//    Do NOT run this against a database that already has these tables.
+//
+// ==========================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// --------------------------------------------------------------------------
+// AUTH / USERS
+// --------------------------------------------------------------------------
+
+model users {
+  id            Int       @id @default(autoincrement())
+  employee_id   Int       @unique
+  employee_code String
+  password      String
+  role          String // "Admin" | "HR" | "Employee" | "Intern"
+  created_at    DateTime  @default(now())
+  // ADDED: forgot-password flow. reset_token stores a sha256 hash of the
+  // token emailed to the user (never the raw token) so a DB leak alone
+  // can't be used to reset a password. reset_token_expiry is epoch
+  // milliseconds (BIGINT), not a timestamp - avoids a timezone parsing
+  // bug where timestamptz values came back without a UTC offset and
+  // were misread as local time - see prisma/sql/add_password_reset_columns.sql
+  reset_token        String?
+  reset_token_expiry BigInt?
+
+  employee employees @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+}
+
+// --------------------------------------------------------------------------
+// EMPLOYEES / DEPARTMENTS
+// --------------------------------------------------------------------------
+
+model departments {
+  id              Int      @id @default(autoincrement())
+  department_name String
+  department_head String?
+  description     String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  employees employees[]
+}
+
+model employees {
+  id                Int       @id @default(autoincrement())
+  employee_code     String    @unique
+  first_name        String
+  gender            String?
+  date_of_birth     DateTime? @db.Date
+  phone             String?
+  personal_email    String?
+  address           String?
+  department_id     Int?
+  designation       String?
+  reporting_manager String?
+  joining_date      DateTime? @db.Date
+  employment_type   String?
+  role              String // "Admin" | "HR" | "Employee" | "Intern"
+  monthly_salary    Decimal?  @db.Decimal(12, 2)
+  // My Profile module (see prisma/sql/add_profile_columns.sql)
+  profile_image_url          String?
+  profile_image_public_id    String?
+  emergency_contact_name     String?
+  emergency_contact_phone    String?
+  emergency_contact_relation String?
+  status            String    @default("Active") // Active | Inactive | On Leave
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  department     departments?     @relation(fields: [department_id], references: [id])
+  user           users?
+  attendance     attendance[]
+  leave_requests leave_requests[]
+  leave_balances leave_balance[]
+  permissions    permissions[]
+  payrolls       payroll[]
+  notifications  notifications[]
+  // Interns module: an intern is an employees row (role = "Intern") plus one
+  // interns row. mentored_interns are the interns this employee supervises.
+  intern           interns?  @relation("InternEmployee")
+  mentored_interns interns[] @relation("InternMentor")
+  assigned_intern_tasks intern_tasks[]    @relation("InternTaskAssigner")
+  covering_interns      mentor_coverage[] @relation("CoverageCoveringEmployee")
+  created_coverage      mentor_coverage[] @relation("CoverageCreator")
+  created_stipends       intern_stipends[] @relation("StipendMarker")
+  // Announcements posted by this employee (joined via employee_code in code)
+  announcements  announcements[]  @relation("AnnouncementPoster")
+
+  @@index([department_id])
+}
+
+// --------------------------------------------------------------------------
+// ATTENDANCE
+// --------------------------------------------------------------------------
+
+model attendance_policy {
+  id                   Int      @id @default(autoincrement())
+  office_start_time    String // stored as time string "HH:mm:ss"
+  office_end_time      String
+  grace_period         Int // minutes
+  half_day_cutoff_time String
+  working_hours        Decimal  @db.Decimal(4, 2) // e.g. 8.00
+  weekly_off_days      String? // e.g. "Saturday,Sunday"
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+}
+
+model attendance {
+  id              Int      @id @default(autoincrement())
+  employee_id     Int
+  attendance_date DateTime @db.Date
+  check_in        String? // "HH:mm:ss"
+  check_out       String?
+  working_hours   String? // "HH:mm:ss"
+  status          String // Present | Late | Half Day | Absent | Leave
+  leave_processed Boolean  @default(false)
+  created_at      DateTime @default(now())
+
+  employee employees @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([employee_id, attendance_date])
+}
+
+model holidays {
+  id           Int      @id @default(autoincrement())
+  holiday_name String
+  holiday_date DateTime @db.Date
+  type         String?
+  description  String?
+  created_at   DateTime @default(now())
+}
+
+// --------------------------------------------------------------------------
+// LEAVE MANAGEMENT
+// --------------------------------------------------------------------------
+
+model leave_policy {
+  id           Int      @id @default(autoincrement())
+  casual_leave Decimal  @db.Decimal(5, 2)
+  sick_leave   Decimal  @db.Decimal(5, 2)
+  earned_leave Decimal  @db.Decimal(5, 2)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+}
+
+model leave_requests {
+  id               Int      @id @default(autoincrement())
+  employee_id      Int
+  leave_type       String // Casual Leave | Sick Leave | Earned Leave | Unpaid Leave
+  start_date       DateTime @db.Date
+  end_date         DateTime @db.Date
+  days             Decimal  @db.Decimal(4, 1) // supports 0.5 for half day
+  is_half_day      Boolean  @default(false)
+  reason           String
+  rejection_reason String?
+  status           String   @default("Pending") // Pending | Approved | Rejected
+  applied_at       DateTime @default(now())
+
+  employee employees @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([employee_id])
+}
+
+model leave_balance {
+  id           Int      @id @default(autoincrement())
+  employee_id  Int
+  casual_leave Decimal  @default(0) @db.Decimal(5, 2)
+  sick_leave   Decimal  @default(0) @db.Decimal(5, 2)
+  earned_leave Decimal  @default(0) @db.Decimal(5, 2)
+  lop          Decimal  @default(0) @db.Decimal(5, 2)
+  year         Int
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  employee employees @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@unique([employee_id, year])
+}
+
+// ADDED: Permission requests (Late Arrival / Early Leave / Medical /
+// Personal / Half Day) - previously "Half Day Leave" used to be applied
+// through leave_requests with is_half_day=true and deducted 0.5 day from
+// leave_balance. That has been removed; half-day and short-absence
+// requests now go through this table instead and do NOT touch
+// leave_balance at all. Approval workflow mirrors leave_requests
+// (Pending | Approved | Rejected, reviewed by HR/Admin).
+// See prisma/sql/create_permissions_table.sql
+model permissions {
+  id               Int      @id @default(autoincrement())
+  employee_id      Int
+  permission_type  String // Late Arrival | Early Leave | Medical | Personal | Half Day
+  permission_date  DateTime @db.Date
+  start_time       String? // "HH:mm" - null when is_half_day is true
+  end_time         String? // "HH:mm" - null when is_half_day is true
+  is_half_day      Boolean  @default(false)
+  reason           String
+  rejection_reason String?
+  status           String   @default("Pending") // Pending | Approved | Rejected
+  applied_at       DateTime @default(now())
+
+  employee employees @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([employee_id])
+}
+
+// --------------------------------------------------------------------------
+// ANNOUNCEMENTS / NOTIFICATIONS
+// --------------------------------------------------------------------------
+
+model announcements {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  posted_by   String // stores employees.employee_code
+  department  String?
+  status      String? // e.g. Published | Draft
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  poster employees @relation("AnnouncementPoster", fields: [posted_by], references: [employee_code])
+}
+
+model notifications {
+  id           Int      @id @default(autoincrement())
+  title        String
+  message      String
+  type         String // Announcement | Leave | Permission | Payroll ...
+  role         String? // HR | Admin | Employee (target audience)
+  department   String? // used with department-wide announcements
+  employee_id  Int? // set when targeted to one employee
+  reference_id Int? // id of the related record (leave, payroll, announcement)
+  is_read      Boolean  @default(false)
+  created_at   DateTime @default(now())
+
+  employee employees? @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+
+  @@index([employee_id])
+}
+
+// --------------------------------------------------------------------------
+// COMPANY SETTINGS
+// --------------------------------------------------------------------------
+
+model company_settings {
+  id              Int      @id @default(autoincrement())
+  company_name    String?
+  company_email   String?
+  phone_number    String?
+  gst_number      String?
+  company_address String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+}
+
+// ADDED: admin-manageable Company Policy list (replaces the hardcoded
+// array that used to live in employeeSettingsController.js) - see
+// prisma/sql/create_company_policies_table.sql
+model company_policies {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+}
+
+// --------------------------------------------------------------------------
+// SALARY CONFIGURATION
+// --------------------------------------------------------------------------
+
+model salary_configurations {
+  id             Int      @id @default(autoincrement())
+  min_salary     Decimal  @db.Decimal(12, 2)
+  max_salary     Decimal  @db.Decimal(12, 2)
+  effective_from DateTime @db.Date
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  components salary_components[]
+  deductions salary_deductions[]
+  payrolls   payroll[]
+}
+
+model salary_components {
+  id                      Int      @id @default(autoincrement())
+  salary_configuration_id Int
+  component_name          String
+  amount                  Decimal  @db.Decimal(12, 2)
+  is_included             Boolean  @default(true)
+  created_at              DateTime @default(now())
+
+  configuration salary_configurations @relation(fields: [salary_configuration_id], references: [id], onDelete: Cascade)
+
+  @@index([salary_configuration_id])
+}
+
+model salary_deductions {
+  id                      Int      @id @default(autoincrement())
+  salary_configuration_id Int
+  deduction_name          String
+  amount                  Decimal  @db.Decimal(12, 2)
+  is_included             Boolean  @default(true)
+  created_at              DateTime @default(now())
+
+  configuration salary_configurations @relation(fields: [salary_configuration_id], references: [id], onDelete: Cascade)
+
+  @@index([salary_configuration_id])
+}
+
+// Master lists used as dropdown options when building a salary configuration
+model salary_component_master {
+  id             Int    @id @default(autoincrement())
+  component_name String
+}
+
+model salary_deduction_master {
+  id             Int    @id @default(autoincrement())
+  deduction_name String
+}
+
+// --------------------------------------------------------------------------
+// PAYROLL
+// --------------------------------------------------------------------------
+
+model payroll_runs {
+  id            Int       @id @default(autoincrement())
+  payroll_month DateTime  @db.Date
+  status        String    @default("Pending") // Pending | Completed
+  processed_at  DateTime?
+  created_at    DateTime  @default(now())
+
+  payrolls payroll[]
+}
+
+model payroll {
+  id                      Int       @id @default(autoincrement())
+  employee_id             Int
+  payroll_month           DateTime  @db.Date
+  basic_salary            Decimal   @db.Decimal(12, 2)
+  gross_salary            Decimal   @db.Decimal(12, 2)
+  deductions              Decimal   @db.Decimal(12, 2)
+  net_salary              Decimal   @db.Decimal(12, 2)
+  lop_days                Decimal   @default(0) @db.Decimal(4, 1)
+  payroll_run_id          Int?
+  salary_configuration_id Int?
+  status                  String    @default("Paid")
+  paid_at                 DateTime?
+  created_at              DateTime  @default(now())
+  updated_at              DateTime  @updatedAt
+
+  employee      employees              @relation(fields: [employee_id], references: [id], onDelete: Cascade)
+  payroll_run   payroll_runs?          @relation(fields: [payroll_run_id], references: [id])
+  configuration salary_configurations? @relation(fields: [salary_configuration_id], references: [id])
+  items         payroll_items[]
+
+  @@index([employee_id])
+  @@index([payroll_run_id])
+}
+
+model payroll_items {
+  id         Int      @id @default(autoincrement())
+  payroll_id Int
+  item_type  String // "Component" | "Deduction"
+  item_name  String
+  amount     Decimal  @db.Decimal(12, 2)
+  created_at DateTime @default(now())
+
+  payroll payroll @relation(fields: [payroll_id], references: [id], onDelete: Cascade)
+
+  @@index([payroll_id])
+}
+
+// ---------------------------------------------------------------------------
+// Interns module (see prisma/sql/add_interns_module.sql - run that in the
+// Supabase SQL Editor; Prisma is schema-only here so the DB is the source of
+// truth for defaults/triggers).
+// ---------------------------------------------------------------------------
+model interns {
+  id                 Int      @id @default(autoincrement())
+  employee_id        Int      @unique
+  intern_code        String   @unique // INT-2026-001 (the login ID is employees.employee_code)
+  mentor_employee_id Int?
+  internship_type    String   @default("Full-Time") // Full-Time | Part-Time
+  internship_fee     Decimal? @db.Decimal(12, 2)
+  monthly_stipend    Decimal  @default(0) @db.Decimal(12, 2)
+  start_date         DateTime @db.Date
+  end_date           DateTime @db.Date
+  status             String   @default("Active") // Active | Completed | Converted | Inactive ("Ending Soon" is derived from end_date, never stored)
+  emergency_contact_name     String?
+  emergency_contact_relation String?
+  emergency_contact_phone    String?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  employee  employees  @relation("InternEmployee", fields: [employee_id], references: [id], onDelete: Cascade)
+  mentor    employees? @relation("InternMentor", fields: [mentor_employee_id], references: [id], onDelete: SetNull)
+  documents intern_documents[]
+  tasks     intern_tasks[]
+  coverage  mentor_coverage[]
+  stipends  intern_stipends[]
+  certificates certificates[]
+
+  @@index([mentor_employee_id])
+  @@index([status])
+  @@index([end_date])
+}
+
+model intern_documents {
+  id         Int      @id @default(autoincrement())
+  intern_id  Int
+  doc_type   String // Aadhaar Card | 10th Certificate | 12th Certificate | Degree / College Certificate | Resume | Other Documents
+  file_name  String
+  file_path  String // object path inside the private "intern-documents" bucket
+  mime_type  String?
+  file_size  Int?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  intern interns @relation(fields: [intern_id], references: [id], onDelete: Cascade)
+
+  @@index([intern_id])
+}
+
+// Employee portal "My Intern" flow - see prisma/sql/add_intern_tasks_and_coverage.sql
+model intern_tasks {
+  id                      Int      @id @default(autoincrement())
+  intern_id               Int
+  title                   String
+  description             String?
+  due_date                DateTime @db.Date
+  assigned_by_employee_id Int?
+  status                  String   @default("Pending") // Pending | In Progress | Submitted | Changes Requested | Completed
+  submission_file_path    String?
+  submission_file_name    String?
+  submission_mime_type    String?
+  submission_file_size    Int?
+  submission_comment      String?
+  submitted_at            DateTime?
+  created_at              DateTime @default(now())
+  updated_at              DateTime @updatedAt
+
+  intern      interns    @relation(fields: [intern_id], references: [id], onDelete: Cascade)
+  assigned_by employees? @relation("InternTaskAssigner", fields: [assigned_by_employee_id], references: [id], onDelete: SetNull)
+
+  @@index([intern_id])
+  @@index([status])
+}
+
+// HR-assigned temporary cover while an intern's mentor is away.
+model mentor_coverage {
+  id                     Int      @id @default(autoincrement())
+  intern_id              Int
+  covering_employee_id   Int
+  start_date             DateTime @db.Date
+  end_date               DateTime @db.Date
+  created_by_employee_id Int?
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+
+  intern           interns    @relation(fields: [intern_id], references: [id], onDelete: Cascade)
+  covering_employee employees  @relation("CoverageCoveringEmployee", fields: [covering_employee_id], references: [id], onDelete: Cascade)
+  created_by        employees? @relation("CoverageCreator", fields: [created_by_employee_id], references: [id], onDelete: SetNull)
+
+  @@index([intern_id])
+  @@index([covering_employee_id])
+}
+
+model intern_stipends {
+  id                     Int      @id @default(autoincrement())
+  intern_id              Int
+  month                  DateTime @db.Date // always the 1st of the month
+  amount                 Decimal  @db.Decimal(12, 2)
+  paid_date              DateTime @db.Date
+  reference              String?
+  created_by_employee_id Int?
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+
+  intern     interns    @relation(fields: [intern_id], references: [id], onDelete: Cascade)
+  created_by employees? @relation("StipendMarker", fields: [created_by_employee_id], references: [id], onDelete: SetNull)
+
+  @@unique([intern_id, month])
+  @@index([intern_id])
+}
+
+// --------------------------------------------------------------------------
+// CERTIFICATES (admin portal) - see prisma/sql/create_certificates_tables.sql
+// --------------------------------------------------------------------------
+
+model certificate_templates {
+  id                     Int      @id @default(autoincrement())
+  name                   String
+  file_path              String // object path inside the "certificate-templates" bucket
+  mime_type              String?
+  created_by_employee_id Int?
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+
+  certificates certificates[]
+}
+
+model certificates {
+  id                     Int       @id @default(autoincrement())
+  certificate_code       String    @unique // CERT-1001
+  certificate_type       String    @default("Internship Completion Certificate")
+  intern_id              Int
+  template_key           String    @default("vsoft_official") // vsoft_official | custom
+  template_id            Int?
+  role                   String
+  department             String?
+  start_date             DateTime  @db.Date
+  end_date               DateTime  @db.Date
+  certificate_date       DateTime  @db.Date
+  authorized_person      String?
+  organization_name      String?
+  status                 String    @default("Draft") // Draft | Issued | Sent
+  issued_at              DateTime?
+  sent_at                DateTime?
+  sent_to                String?
+  created_by_employee_id Int?
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+
+  intern   interns                @relation(fields: [intern_id], references: [id], onDelete: Cascade)
+  template certificate_templates? @relation(fields: [template_id], references: [id], onDelete: SetNull)
+
+  @@index([intern_id])
+  @@index([status])
+}

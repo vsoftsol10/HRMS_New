@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+/*
+ * Intern portal text size - applies ONLY inside .intern-portal, which MainLayout
+ * adds on /intern/... pages. HR, Admin and Employee portals are untouched.
+ *
+ * Why: the HR / Admin / Employee pages use the shared Table, Filter, PageHeader
+ * components, which render at the browser default (16px). The intern pages were
+ * hand-built one step smaller (text-sm 14px, text-xs 12px, 11px labels), so they
+ * looked small next to the other portals. Each small size is bumped up one step
+ * so the intern portal reads the same as the rest of the app:
+ *
+ *   text-sm      14px -> 16px   (body, table cells, buttons)
+ *   text-xs      12px -> 14px   (secondary text)
+ *   text-[11px]  11px -> 13px   (small labels - same as the HR stat-card labels)
+ *   text-base and larger (headings, big numbers) are unchanged.
+ *
+ * Written outside Tailwind's layers so it wins over the utility classes.
+ */
+.intern-portal .text-sm {
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.intern-portal .text-xs {
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.intern-portal .text-\[11px\],
+.intern-portal .text-\[10px\] {
+  font-size: 13px;
+  line-height: 20px;
+}
