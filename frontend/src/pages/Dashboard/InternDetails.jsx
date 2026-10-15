@@ -1,3 +1,4 @@
+import PageLoader from "../../components/PageLoader.jsx";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, GraduationCap, Pencil, TriangleAlert } from "lucide-react";
@@ -94,9 +95,7 @@ export default function InternDetails() {
             <ArrowLeft size={18} /> Back to Interns
           </Link>
 
-          <p className={error ? "text-red-600" : "text-gray-500"}>
-            {error || "Loading..."}
-          </p>
+          {error ? <p className="text-red-600">{error}</p> : <PageLoader />}
         </div>
       </MainLayout>
     );

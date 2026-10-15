@@ -1,3 +1,4 @@
+import PageLoader from "../PageLoader.jsx";
 import { useCallback, useEffect, useState } from "react";
 
 import internStipendServices from "../../services/internStipendServices";
@@ -41,7 +42,7 @@ export default function InternStipendHistory({ intern }) {
   };
 
   if (rows === null) {
-    return <p className="py-10 text-center text-gray-500">Loading...</p>;
+    return <PageLoader className="min-h-[30vh]" />;
   }
 
   if (error) {

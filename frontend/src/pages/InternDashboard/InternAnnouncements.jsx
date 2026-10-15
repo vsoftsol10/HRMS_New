@@ -6,6 +6,7 @@
 //   return <EmployeeAnnouncements />;
 // }
 
+import PageLoader from "../../components/PageLoader.jsx";
 import { useState } from "react";
 import { Megaphone, User, X } from "lucide-react";
 
@@ -57,7 +58,7 @@ export default function InternAnnouncements() {
         )}
 
         {loading && announcements.length === 0 && (
-          <p className="text-gray-500">Loading...</p>
+          <PageLoader className="min-h-[30vh]" />
         )}
 
         {!loading && !error && announcements.length === 0 && (

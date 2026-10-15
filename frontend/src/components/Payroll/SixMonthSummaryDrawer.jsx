@@ -1,3 +1,4 @@
+import PageLoader from "../PageLoader.jsx";
 import { X } from "lucide-react";
 
 const formatCurrency = (value) =>
@@ -48,7 +49,7 @@ export default function SixMonthSummaryDrawer({
 
         <div className="px-6 pb-6 space-y-5">
           {loading && (
-            <p className="text-sm text-gray-500">Loading summary...</p>
+            <PageLoader text="Loading summary..." className="min-h-[30vh]" />
           )}
 
           {!loading && summary && summary.monthsIncluded === 0 && (

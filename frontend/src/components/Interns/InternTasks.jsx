@@ -1,3 +1,4 @@
+import PageLoader from "../PageLoader.jsx";
 import { useEffect, useState } from "react";
 
 import StatusBadge from "../StatusBadge";
@@ -39,7 +40,7 @@ export default function InternTasks({ internId }) {
       </p>
 
       {error && <p className="text-red-600">{error}</p>}
-      {!error && tasks === null && <p className="text-gray-500">Loading...</p>}
+      {!error && tasks === null && <PageLoader className="min-h-[30vh]" />}
 
       {tasks && tasks.length === 0 && (
         <p className="py-8 text-center text-gray-500">

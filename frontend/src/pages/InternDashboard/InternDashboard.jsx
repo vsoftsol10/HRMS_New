@@ -1,3 +1,4 @@
+import PageLoader from "../../components/PageLoader.jsx";
 import {
   Bell,
   CalendarCheck,
@@ -42,7 +43,7 @@ export default function InternDashboard() {
   if (loading && !data?.full_name) {
     return (
       <MainLayout title="Dashboard">
-        <p className="text-gray-500">Loading...</p>
+        <PageLoader />
       </MainLayout>
     );
   }
