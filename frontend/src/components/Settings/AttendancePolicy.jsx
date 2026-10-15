@@ -9,6 +9,7 @@ export default function AttendancePolicy() {
 
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [policy, setPolicy] = useState({
     office_start_time: "",
@@ -50,6 +51,7 @@ export default function AttendancePolicy() {
       });
 
       reload();
+      setIsEditing(false);
     } catch (error) {
       await alert({
         title: "Error",
@@ -61,6 +63,12 @@ export default function AttendancePolicy() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancel = () => {
+    if (data) setPolicy(data);
+    setErrors({});
+    setIsEditing(false);
   };
 
   const handlePolicyChange = (name, value) => {
@@ -81,7 +89,8 @@ export default function AttendancePolicy() {
             type="time"
             value={policy.office_start_time || ""}
             onChange={(e) => handlePolicyChange("office_start_time", e.target.value)}
-            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.office_start_time ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400`}
+            disabled={!isEditing}
+            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.office_start_time ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 disabled:bg-gray-100 disabled:cursor-not-allowed`}
           />
           {errors.office_start_time && <p className="text-sm text-red-500 mt-1">{errors.office_start_time}</p>}
         </div>
@@ -94,7 +103,8 @@ export default function AttendancePolicy() {
             type="time"
             value={policy.office_end_time || ""}
             onChange={(e) => handlePolicyChange("office_end_time", e.target.value)}
-            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.office_end_time ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400`}
+            disabled={!isEditing}
+            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.office_end_time ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 disabled:bg-gray-100 disabled:cursor-not-allowed`}
           />
           {errors.office_end_time && <p className="text-sm text-red-500 mt-1">{errors.office_end_time}</p>}
         </div>
@@ -107,7 +117,8 @@ export default function AttendancePolicy() {
             type="number"
             value={policy.grace_period || ""}
             onChange={(e) => handlePolicyChange("grace_period", e.target.value)}
-            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.grace_period ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400`}
+            disabled={!isEditing}
+            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.grace_period ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 disabled:bg-gray-100 disabled:cursor-not-allowed`}
           />
           {errors.grace_period && <p className="text-sm text-red-500 mt-1">{errors.grace_period}</p>}
         </div>
@@ -120,7 +131,8 @@ export default function AttendancePolicy() {
             type="time"
             value={policy.half_day_cutoff_time || ""}
             onChange={(e) => handlePolicyChange("half_day_cutoff_time", e.target.value)}
-            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.half_day_cutoff_time ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400`}
+            disabled={!isEditing}
+            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.half_day_cutoff_time ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 disabled:bg-gray-100 disabled:cursor-not-allowed`}
           />
           {errors.half_day_cutoff_time && <p className="text-sm text-red-500 mt-1">{errors.half_day_cutoff_time}</p>}
         </div>
@@ -134,7 +146,8 @@ export default function AttendancePolicy() {
             step="0.5"
             value={policy.working_hours || ""}
             onChange={(e) => handlePolicyChange("working_hours", e.target.value)}
-            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.working_hours ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400`}
+            disabled={!isEditing}
+            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.working_hours ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 disabled:bg-gray-100 disabled:cursor-not-allowed`}
           />
           {errors.working_hours && <p className="text-sm text-red-500 mt-1">{errors.working_hours}</p>}
         </div>
@@ -146,17 +159,27 @@ export default function AttendancePolicy() {
           <input
             value={policy.weekly_off_days || ""}
             onChange={(e) => handlePolicyChange("weekly_off_days", e.target.value)}
+            disabled={!isEditing}
             placeholder="e.g. Saturday, Sunday"
-            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.weekly_off_days ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400`}
+            className={`w-full mt-2 px-4 py-3 rounded-xl border ${errors.weekly_off_days ? "border-red-500" : "border-gray-400"} hover:border-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 disabled:bg-gray-100 disabled:cursor-not-allowed`}
           />
           {errors.weekly_off_days && <p className="text-sm text-red-500 mt-1">{errors.weekly_off_days}</p>}
         </div>
       </div>
 
-      <div className="flex justify-end mt-6">
-        <Button onClick={handleSave} loading={loading} loadingText="Saving...">
-          Save Policy
-        </Button>
+      <div className="flex justify-end gap-3 mt-6">
+        {isEditing ? (
+          <>
+            <Button variant="secondary" onClick={handleCancel} disabled={loading}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} loading={loading} loadingText="Saving...">
+              Save Policy
+            </Button>
+          </>
+        ) : (
+          <Button onClick={() => setIsEditing(true)}>Edit</Button>
+        )}
       </div>
     </div>
   );

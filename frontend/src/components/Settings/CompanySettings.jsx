@@ -14,6 +14,7 @@ export default function CompanySettings() {
   const { data, reload } = useFetch(companySettingsServices);
   console.log(data);
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
 const handleSave = async () => {
   const nextErrors = {};
@@ -31,6 +32,7 @@ const handleSave = async () => {
     await companySettingsServices.save(companyData);
 
     reload();
+    setIsEditing(false);
 
     await alert({
       title: "Success",
@@ -78,6 +80,12 @@ const handleSave = async () => {
     }
   }
   const [logo, setLogo] = useState(null);
+
+  const handleCancel = () => {
+    setCompany({ ...initialCompany, ...(data || {}) });
+    setErrors({});
+    setIsEditing(false);
+  };
 
   const handleChange = (e) => {
     setErrors((prev) => ({ ...prev, [e.target.name]: "" }));
@@ -150,6 +158,7 @@ const handleSave = async () => {
             )}
           </div>
 
+          {isEditing && (
           <label
             className="
             w-full flex items-center justify-center gap-3
@@ -169,8 +178,9 @@ const handleSave = async () => {
               onChange={handleLogoUpload}
             />
           </label>
+          )}
 
-          {logo && (
+          {isEditing && logo && (
             <button
               type="button"
               onClick={handleLogoRemove}
@@ -210,6 +220,7 @@ const handleSave = async () => {
                   name="company_name"
                   value={company.company_name}
                   onChange={handleChange}
+                  disabled={!isEditing}
                   error={errors.company_name}
                 />
               </div>
@@ -219,6 +230,7 @@ const handleSave = async () => {
                 name="company_email"
                 value={company.company_email}
                 onChange={handleChange}
+                disabled={!isEditing}
                 error={errors.company_email}
               />
 
@@ -227,6 +239,7 @@ const handleSave = async () => {
                 name="phone_number"
                 value={company.phone_number}
                 onChange={handleChange}
+                disabled={!isEditing}
                 error={errors.phone_number}
               />
             </div>
@@ -247,6 +260,7 @@ const handleSave = async () => {
                 name="gst_number"
                 value={company.gst_number}
                 onChange={handleChange}
+                disabled={!isEditing}
               />
 
               <div>
@@ -259,26 +273,45 @@ const handleSave = async () => {
                   value={company.company_address}
                   onChange={handleChange}
                   rows={3}
+                  disabled={!isEditing}
+                  readOnly={!isEditing}
                   className="
                   w-full border border-gray-400 rounded-xl p-4 hover:border-yellow-400
                   focus:outline-none
                   focus:ring-2
                   focus:ring-yellow-400
+                  disabled:bg-gray-100 disabled:cursor-not-allowed
                   "
                 />
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              onClick={handleSave}
-              loading={loading}
-              loadingText="Saving..."
-            >
-              Save Changes
-            </Button>
+          <div className="flex justify-end gap-3">
+            {isEditing ? (
+              <>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCancel}
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSave}
+                  loading={loading}
+                  loadingText="Saving..."
+                >
+                  Save Changes
+                </Button>
+              </>
+            ) : (
+              <Button type="button" onClick={() => setIsEditing(true)}>
+                Edit
+              </Button>
+            )}
           </div>
         </div>
       </div>

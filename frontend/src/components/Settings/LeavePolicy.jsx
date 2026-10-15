@@ -17,6 +17,7 @@ export default function LeavePolicy() {
 
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const { data, reload } = useFetch(leavePolicyServices);
 
@@ -57,6 +58,7 @@ const handleSave = async () => {
     });
 
     reload();
+    setIsEditing(false);
   } catch (error) {
     console.log(error);
 
@@ -69,6 +71,12 @@ const handleSave = async () => {
   } finally {
     setLoading(false);
   }
+};
+
+const handleCancel = () => {
+  if (data) setPolicy((prev) => ({ ...prev, ...data }));
+  setErrors({});
+  setIsEditing(false);
 };
 
 const handleChange = (e) => {
@@ -89,6 +97,7 @@ const handleChange = (e) => {
           name="casual_leave"
           value={policy.casual_leave}
           onChange={handleChange}
+          disabled={!isEditing}
           error={errors.casual_leave}
         />
 
@@ -97,6 +106,7 @@ const handleChange = (e) => {
           name="sick_leave"
           value={policy.sick_leave}
           onChange={handleChange}
+          disabled={!isEditing}
           error={errors.sick_leave}
         />
 
@@ -105,15 +115,25 @@ const handleChange = (e) => {
           name="earned_leave"
           value={policy.earned_leave}
           onChange={handleChange}
+          disabled={!isEditing}
           error={errors.earned_leave}
         />
 
       </div>
 
-      <div className="flex justify-end ">
-        <Button onClick={handleSave} loading={loading} loadingText="Saving...">
-          Save Policy
-        </Button>
+      <div className="flex justify-end gap-3">
+        {isEditing ? (
+          <>
+            <Button variant="secondary" onClick={handleCancel} disabled={loading}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} loading={loading} loadingText="Saving...">
+              Save Policy
+            </Button>
+          </>
+        ) : (
+          <Button onClick={() => setIsEditing(true)}>Edit</Button>
+        )}
       </div>
     </div>
   );
