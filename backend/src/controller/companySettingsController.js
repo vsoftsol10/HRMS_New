@@ -32,7 +32,14 @@ export const saveCompanySettings = async (req, res) => {
     return res.status(500).json({ message: fetchError.message });
   }
 
-  const payload = { ...req.body, updated_at: new Date() };
+  // Whitelist the columns that exist on company_settings. The form also
+  // sends company_logo (a browser blob: preview URL, not a stored file) and
+  // an unknown column makes Supabase reject the whole write with a 500.
+  const ALLOWED = ["company_name", "company_email", "phone_number", "gst_number", "company_address"];
+  const payload = { updated_at: new Date() };
+  for (const key of ALLOWED) {
+    if (req.body?.[key] !== undefined) payload[key] = req.body[key];
+  }
 
   const query = existing
     ? supabase.from("company_settings").update(payload).eq("id", existing.id)
