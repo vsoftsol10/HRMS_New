@@ -1,4 +1,4 @@
-  // authcontroller.js
+// authcontroller.js
   import supabase from "../config/supabase.js";
   import bcrypt from "bcrypt";
   import jwt from "jsonwebtoken";
@@ -171,7 +171,7 @@
 
       // validateEnv() makes FRONTEND_LOGIN_URL mandatory in production; the
       // localhost fallback only exists for local development.
-      const baseUrl = process.env.FRONTEND_LOGIN_URL || "http://localhost:5173";
+      const baseUrl = (process.env.FRONTEND_LOGIN_URL || "http://localhost:5173").replace(/\/+$/, "");
       const resetUrl = `${baseUrl}/reset-password?token=${rawToken}`;
 
       // Non-blocking, same contract as sendWelcomeEmail - email failure

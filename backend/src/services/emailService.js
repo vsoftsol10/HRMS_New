@@ -167,7 +167,7 @@ export const sendAnnouncementEmail = async ({
     return { sent: false, reason: "Email service not configured" };
   }
 
-  const portalUrl = process.env.FRONTEND_LOGIN_URL || "http://localhost:5173";
+  const portalUrl = (process.env.FRONTEND_LOGIN_URL || "http://localhost:5173").replace(/\/+$/, "");
 
   const payload = {
     sender: getSenderConfig(),
@@ -228,7 +228,7 @@ export const sendWelcomeEmail = async ({
     return { sent: false, reason: "Email service not configured" };
   }
 
-  const loginUrl = process.env.FRONTEND_LOGIN_URL || "http://localhost:5173";
+  const loginUrl = (process.env.FRONTEND_LOGIN_URL || "http://localhost:5173").replace(/\/+$/, "");
 
   const payload = {
     sender: getSenderConfig(),
