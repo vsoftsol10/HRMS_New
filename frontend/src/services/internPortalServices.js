@@ -9,6 +9,12 @@ const internPortalServices = {
     return response.data;
   },
 
+  // { stipend_enabled } - false while the intern is on a free (Rs.0) internship
+  getStipendAccess: async () => {
+    const response = await api.get("/intern-portal/stipend-access");
+    return response.data;
+  },
+
   getProfile: async () => {
     const response = await api.get("/intern-portal/profile");
     return response.data;

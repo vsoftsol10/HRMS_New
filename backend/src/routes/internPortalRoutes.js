@@ -17,6 +17,7 @@ import {
   submitTask,
   getSubmissionUrl,
   getStipends,
+  getStipendAccess,
 } from "../controller/internPortalController.js";
 
 const router = express.Router();
@@ -43,6 +44,7 @@ router.patch("/tasks/:id/status", updateTaskStatus);
 router.post("/tasks/:id/submit", uploadTaskSubmission, submitTask);
 router.get("/tasks/:id/submission-url", getSubmissionUrl);
 
+router.get("/stipend-access", getStipendAccess);
 router.get("/stipends", getStipends);
 
 export default router;

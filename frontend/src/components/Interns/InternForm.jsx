@@ -37,7 +37,9 @@ const initialForm = {
   internship_type: "Full-Time",
   start_date: "",
   end_date: "",
-  monthly_stipend: "",
+  // 0 = free (unpaid) internship: no Stipend module in the intern portal until
+  // this is raised above 0 (Free -> Paid).
+  monthly_stipend: "0",
   mentor_employee_id: "",
   status: "Active",
 };
@@ -541,7 +543,7 @@ export default function InternForm({ internId }) {
               label="Monthly Stipend (₹) *"
               name="monthly_stipend"
               type="text"
-              placeholder="e.g. 15000"
+              placeholder="0 = free internship, e.g. 15000"
               value={form.monthly_stipend}
               onChange={handleChange}
               error={errors.monthly_stipend}

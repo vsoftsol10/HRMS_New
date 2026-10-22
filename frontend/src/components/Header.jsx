@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from "react-router-dom";
 import { adminMenus, employeeMenus, internMenus } from "./Constants/Menus.js";
+import useInternStipendAccess from "../hooks/useInternStipendAccess";
 import useFetch from "../hooks/useFetch.js";
 import dashboardServices from "../services/dashboardServices.js";
 import employeeDashboardServices from "../services/employeeDashboardServices.js";
@@ -140,7 +141,14 @@ export default function Header({ search, setSearch, sidebarOpen, setSidebarOpen 
   }, [reloadProfile]);
 
   // Menu based on role
-  const menus = isIntern ? internMenus : isEmployee ? employeeMenus : adminMenus;
+  const stipendEnabled = useInternStipendAccess(isIntern);
+
+  // Interns on a free internship have no Stipend module (also in search).
+  const menus = isIntern
+    ? internMenus.filter((menu) => menu.path !== "/intern/stipend" || stipendEnabled)
+    : isEmployee
+      ? employeeMenus
+      : adminMenus;
 
   const filteredMenus = menus.filter((menu) =>
     menu.name.toLowerCase().includes(search.toLowerCase())

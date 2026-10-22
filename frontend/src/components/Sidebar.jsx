@@ -4,6 +4,7 @@ import { adminMenus, employeeMenus, internMenus } from "./Constants/Menus.js";
 import attendanceServices from "../services/attendanceServices";
 import { useDialog } from "./Dialogbox/DialogContext";
 import { clearAllSessions } from "../utils/auth";
+import useInternStipendAccess from "../hooks/useInternStipendAccess";
 
 import {
   LogOut,
@@ -74,7 +75,14 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
     }
   };
 
-  const menus = isIntern ? internMenus : isEmployee ? employeeMenus : adminMenus;
+  const stipendEnabled = useInternStipendAccess(isIntern);
+
+  // Interns on a free internship have no Stipend module.
+  const menus = isIntern
+    ? internMenus.filter((menu) => menu.path !== "/intern/stipend" || stipendEnabled)
+    : isEmployee
+      ? employeeMenus
+      : adminMenus;
 
   return (
     <div

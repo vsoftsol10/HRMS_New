@@ -463,7 +463,9 @@ function InternshipDetails({ profile }) {
         <Field label="Intern ID" value={profile.intern_code} />
         <Field label="Department" value={profile.department_name} />
         <Field label="Position" value={profile.designation} />
-        <Field label="Monthly Stipend" value={profile.monthly_stipend != null ? `₹${Number(profile.monthly_stipend).toLocaleString("en-IN")}` : "-"} />
+        {Number(profile.monthly_stipend) > 0 && (
+          <Field label="Monthly Stipend" value={`₹${Number(profile.monthly_stipend).toLocaleString("en-IN")}`} />
+        )}
         <Field label="Start Date" value={formatDate(profile.start_date)} />
         <Field label="End Date" value={formatDate(profile.end_date)} />
         <Field label="Mentor" value={profile.mentor_name} />
