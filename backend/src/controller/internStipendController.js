@@ -146,6 +146,7 @@ export const getMonthlyInternStipends = async (req, res) => {
         id,
         intern_code,
         monthly_stipend,
+        stipend_start_month,
         start_date,
         end_date,
         status,
@@ -180,7 +181,15 @@ export const getMonthlyInternStipends = async (req, res) => {
 
     const rows = (interns || []).map((intern) => {
       const paid = paidByIntern.get(intern.id);
-      const amount = paid ? Number(paid.amount) : Number(intern.monthly_stipend);
+      const stipendStart = intern.stipend_start_month
+        ? String(intern.stipend_start_month).slice(0, 10)
+        : null;
+      const beforeStipendStart = stipendStart && monthStart < stipendStart && !paid;
+      const amount = beforeStipendStart
+        ? 0
+        : paid
+          ? Number(paid.amount)
+          : Number(intern.monthly_stipend);
 
       // Rs.0 stipend = free (unpaid) internship: nothing to pay, so it is
       // "Free" rather than a Pending row that HR would have to mark as paid.

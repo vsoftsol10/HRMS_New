@@ -12,7 +12,7 @@ export default function AttendanceSummary({ attendancePercentage = 0, present = 
   const chartData = [
     {
       name: "Present",
-      value: present,
+      value: Math.max(present - late, 0),
       color: "#22C55E",
     },
     {

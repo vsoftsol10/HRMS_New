@@ -386,7 +386,7 @@ export const updateEmployee = async (req, res) => {
     // Current state is needed for the role / status permission checks.
     const { data: current, error: currentError } = await supabase
       .from("employees")
-      .select("id, role, status, monthly_salary, designation, department_id, joining_date, employment_type")
+      .select("id, role, status, personal_email, monthly_salary, designation, department_id, joining_date, employment_type")
       .eq("id", id)
       .maybeSingle();
 
@@ -516,7 +516,69 @@ export const updateEmployee = async (req, res) => {
     // role / status changes must apply to the very next request
     invalidateAuthCache(id);
 
-    res.json(data);
+    /*
+     * FIX: the login credentials are only emailed once, when the employee
+     * is created. If HR typed a wrong email there and corrected it later,
+     * the real address never received anything and the password (stored
+     * only as a hash) could not be re-sent. When personal_email actually
+     * changes, issue a fresh password and email it to the NEW address.
+     *
+     * Skipped when: it is your own account, the account is Inactive, or an
+     * HR user is editing an Admin / HR account (only an Admin may reset
+     * those credentials).
+     */
+    const newEmail = updates.personal_email;
+    const emailChanged =
+      Boolean(newEmail) &&
+      String(newEmail).toLowerCase() !==
+        String(current.personal_email || "").toLowerCase();
+
+    const mayReissueCredentials =
+      emailChanged &&
+      !isSelf &&
+      data.status !== "Inactive" &&
+      (current.role === "Employee" || isAdmin(req));
+
+    if (!mayReissueCredentials) {
+      return res.json(data);
+    }
+
+    let credentialResult = { sent: false, reason: "Credentials could not be reset" };
+
+    try {
+      const generatedPassword = generatePassword();
+      const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+
+      const { error: passwordError } = await supabase
+        .from("users")
+        .update({ password: hashedPassword })
+        .eq("employee_id", id);
+
+      if (passwordError) throw passwordError;
+
+      invalidateAuthCache(id);
+
+      credentialResult = await sendWelcomeEmail({
+        toEmail: data.personal_email,
+        employeeName: data.first_name,
+        employeeCode: data.employee_code,
+        password: generatedPassword,
+      });
+    } catch (credentialError) {
+      console.error(
+        `[employees.updateEmployee] could not re-issue credentials for employee ${id}:`,
+        credentialError.message,
+      );
+    }
+
+    res.json({
+      ...data,
+      credentialsReissued: true,
+      emailSent: credentialResult.sent,
+      ...(credentialResult.sent
+        ? {}
+        : { emailError: publicEmailError(credentialResult.reason) }),
+    });
   } catch (err) {
     sendServerError(res, err, "employees.updateEmployee");
   }

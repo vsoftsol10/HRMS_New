@@ -425,6 +425,7 @@ model interns {
   internship_type    String   @default("Full-Time") // Full-Time | Part-Time
   internship_fee     Decimal? @db.Decimal(12, 2)
   monthly_stipend    Decimal  @default(0) @db.Decimal(12, 2)
+  stipend_start_month DateTime? @db.Date // 1st of the month paid stipend begins; earlier months stay free (Rs.0). null = from start_date
   start_date         DateTime @db.Date
   end_date           DateTime @db.Date
   status             String   @default("Active") // Active | Completed | Converted | Inactive ("Ending Soon" is derived from end_date, never stored)

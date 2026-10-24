@@ -88,7 +88,7 @@ export default function Sidebar({ sidebarOpen, setSidebarOpen }) {
     <div
       className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r border-gray-300 flex flex-col transition-transform duration-300 ${
         sidebarOpen ? "translate-x-0" : "-translate-x-full"
-      } lg:static lg:z-auto lg:translate-x-0 lg:transition-all ${
+      } lg:relative lg:z-40 lg:translate-x-0 lg:transition-all ${
         sidebarOpen ? "lg:w-72" : "lg:w-20"
       }`}
     >

@@ -1050,6 +1050,8 @@ import supabase from "../config/supabase.js";
 import { safeErrorMessage } from "../utils/httpError.js";
 import { processAttendanceLop } from "../services/attendanceLopService.js";
 import { rejectSelfAction } from "../utils/selfActionGuard.js";
+import { getWorkingDaysInMonth } from "../utils/dateUtils.js";
+import { getMissedAttendanceDates } from "../utils/missedAttendance.js";
 
 
 // holiday check helper
@@ -1562,6 +1564,43 @@ export const getEmployeeAttendance = async (req, res) => {
 
     const records = attendance || [];
 
+    // Working days of the whole month = days - weekly offs - holidays.
+    const monthKey = `${targetYear}-${String(targetMonth + 1).padStart(2, "0")}`;
+
+    const [
+      { data: policy, error: policyError },
+      { data: holidayRows, error: holidayError },
+    ] = await Promise.all([
+      supabase
+        .from("attendance_policy")
+        .select("weekly_off_days")
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("holidays")
+        .select("holiday_date")
+        .gte("holiday_date", formatDate(startOfMonth))
+        .lte("holiday_date", formatDate(endOfMonth)),
+    ]);
+
+    if (policyError) throw policyError;
+    if (holidayError) throw holidayError;
+
+    // DISPLAY ONLY (nothing is written, payroll / LOP unaffected): working
+    // days with no attendance row are shown as absent on the portal.
+    const missedDates = await getMissedAttendanceDates(
+      employeeId,
+      formatDate(startOfMonth),
+      formatDate(endOfMonth),
+    );
+
+    const workingDays = getWorkingDaysInMonth(
+      targetYear,
+      targetMonth + 1,
+      policy?.weekly_off_days,
+      (holidayRows || []).map((row) => String(row.holiday_date).slice(0, 10)),
+    );
+
     const presentDays = records.filter(
       (item) => item.status === "Present",
     ).length;
@@ -1584,8 +1623,10 @@ export const getEmployeeAttendance = async (req, res) => {
      */
     const attendedDays = presentDays + lateDays + halfDays * 0.5;
 
+    // Working days with no record count as absent in the percentage too.
     const totalRecordedDays =
-      presentDays + lateDays + halfDays + absentDays + leaveDays;
+      presentDays + lateDays + halfDays + absentDays + leaveDays +
+      missedDates.length;
 
     const attendancePercentage =
       totalRecordedDays > 0
@@ -1594,6 +1635,9 @@ export const getEmployeeAttendance = async (req, res) => {
 
     return res.status(200).json({
       attendance: records,
+      month: monthKey,
+      workingDays,
+      missedDates,
       stats: {
         presentDays,
         lateDays,

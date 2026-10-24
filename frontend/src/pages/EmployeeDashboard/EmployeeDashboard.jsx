@@ -88,7 +88,7 @@ export default function EmployeeDashboard() {
             <AttendanceSummary
               attendance={data.attendance || []}
               attendancePercentage={dashboardStats.attendancePercentage || 0}
-              present={dashboardStats.presentDays || 0}
+              present={present}
               absent={dashboardStats.absentDays || 0}
               leave={dashboardStats.leaveDays || 0}
               late={dashboardStats.lateDays || 0}

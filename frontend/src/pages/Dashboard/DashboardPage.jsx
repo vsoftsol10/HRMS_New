@@ -84,7 +84,7 @@ const { data } = useFetch(dashboardServices);
             <EmployeeGrowth />
           </div>
 
-          <PayrollStatus />
+          <PayrollStatus payroll={data?.payrollStatus} />
         </div>
 
         {/* Attendance & Holidays */}

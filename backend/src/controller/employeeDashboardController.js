@@ -2,6 +2,8 @@ import supabase from "../config/supabase.js";
 import { getToday, getMonthRange } from "../utils/dateUtils.js";
 import { matchesDepartment, departmentsAsArray } from "../utils/departmentMatch.js";
 import { safeErrorMessage } from "../utils/httpError.js";
+import { getMissedAttendanceDates } from "../utils/missedAttendance.js";
+import { initializeLeaveBalance } from "../services/leaveBalanceService.js";
 
 export const getEmployeeDashboard = async (req, res) => {
   try {
@@ -100,6 +102,14 @@ export const getEmployeeDashboard = async (req, res) => {
 
     const records = attendance || [];
 
+    // DISPLAY ONLY: working days with no attendance row count as absent
+    // (same rule as the Attendance page). Nothing is written to the DB.
+    const missedDates = await getMissedAttendanceDates(
+      employeeId,
+      startOfMonth,
+      endOfMonth,
+    );
+
     const presentDays = records.filter(
       (item) => item.status === "Present",
     ).length;
@@ -112,9 +122,9 @@ export const getEmployeeDashboard = async (req, res) => {
 
     const leaveDays = records.filter((item) => item.status === "Leave").length;
 
-    const absentDays = records.filter(
-      (item) => item.status === "Absent",
-    ).length;
+    const absentDays =
+      records.filter((item) => item.status === "Absent").length +
+      missedDates.length;
 
     /*
      * Attendance calculation:
@@ -136,13 +146,25 @@ export const getEmployeeDashboard = async (req, res) => {
         ? Math.round((attendedDays / totalRecordedDays) * 100)
         : 0;
 
-    // Leave Balance (example)
+    // Leave Balance - same source as the Leave page: remaining casual +
+    // sick + earned from leave_balance for the current year.
+    let { data: balanceRow, error: balanceError } = await supabase
+      .from("leave_balance")
+      .select("casual_leave, sick_leave, earned_leave")
+      .eq("employee_id", employeeId)
+      .eq("year", currentYear)
+      .maybeSingle();
 
-    const approvedLeaves = (leaveRequests || []).filter(
-      (item) => item.status === "Approved",
-    ).length;
+    if (balanceError) throw balanceError;
 
-    const leaveBalance = 2 - approvedLeaves;
+    if (!balanceRow) {
+      balanceRow = await initializeLeaveBalance(employeeId, currentYear);
+    }
+
+    const leaveBalance =
+      Number(balanceRow?.casual_leave || 0) +
+      Number(balanceRow?.sick_leave || 0) +
+      Number(balanceRow?.earned_leave || 0);
 
     const recentAnnouncements = (announcements || [])
       .filter((a) =>

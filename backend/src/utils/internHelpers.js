@@ -14,6 +14,7 @@ export const INTERN_SELECT = `
   internship_type,
   internship_fee,
   monthly_stipend,
+  stipend_start_month,
   start_date,
   end_date,
   status,

@@ -13,6 +13,22 @@ const dayAfter = (value) => {
   return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
 };
 
+const monthStartOf = (value) => `${String(value).slice(0, 7)}-01`;
+
+const nextMonthStart = (monthStart) => {
+  const [y, m] = monthStart.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+};
+
+const monthOptionLabel = (monthStart) => {
+  const [y, m] = monthStart.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+  });
+};
+
 export default function ExtendInternModal({ intern, onClose, onDone }) {
   const { alert } = useDialog();
 
@@ -22,6 +38,36 @@ export default function ExtendInternModal({ intern, onClose, onDone }) {
   const [saving, setSaving] = useState(false);
 
   const minDate = dayAfter(intern.end_date);
+
+  // Free (Rs.0) internship that becomes paid on extension: HR picks the month
+  // the stipend starts, so the earlier free months stay Rs.0. Defaults to the
+  // month after the current end date.
+  const [stipendStartChoice, setStipendStartChoice] = useState("");
+  const isFreeToPaid =
+    Number(intern.monthly_stipend) === 0 &&
+    stipend !== "" &&
+    Number(stipend) > 0;
+
+  const oldEndMonth = monthStartOf(intern.end_date);
+  const defaultStipendStart = nextMonthStart(oldEndMonth);
+  const lastStartOption = newEndDate
+    ? monthStartOf(newEndDate)
+    : defaultStipendStart;
+
+  const stipendStartOptions = [];
+  for (
+    let month = oldEndMonth;
+    month <= lastStartOption;
+    month = nextMonthStart(month)
+  ) {
+    stipendStartOptions.push(month);
+  }
+
+  const stipendStart = stipendStartOptions.includes(stipendStartChoice)
+    ? stipendStartChoice
+    : stipendStartOptions.includes(defaultStipendStart)
+      ? defaultStipendStart
+      : stipendStartOptions[stipendStartOptions.length - 1];
 
   const validate = () => {
     const next = {};
@@ -48,6 +94,7 @@ export default function ExtendInternModal({ intern, onClose, onDone }) {
       await internServices.extend(intern.id, {
         new_end_date: newEndDate,
         monthly_stipend: Number(stipend),
+        ...(isFreeToPaid ? { stipend_start_month: stipendStart } : {}),
       });
       onDone();
     } catch (err) {
@@ -140,6 +187,29 @@ export default function ExtendInternModal({ intern, onClose, onDone }) {
             setErrors((prev) => ({ ...prev, monthly_stipend: "" }));
           }}
         />
+
+        {isFreeToPaid && (
+          <div>
+            <label className="block mb-2 font-medium">
+              Stipend Starts From *
+            </label>
+            <select
+              value={stipendStart}
+              onChange={(event) => setStipendStartChoice(event.target.value)}
+              className="w-full border border-gray-400 rounded-lg px-3 py-3 outline-none shadow-sm bg-white focus:ring-2 focus:ring-yellow-400 hover:border-yellow-300 cursor-pointer"
+            >
+              {stipendStartOptions.map((month) => (
+                <option key={month} value={month}>
+                  {monthOptionLabel(month)}
+                </option>
+              ))}
+            </select>
+            <p className="text-sm text-gray-500 mt-1">
+              Months before this stay free (₹0); the stipend is payable from
+              this month onward.
+            </p>
+          </div>
+        )}
       </div>
     </OutcomeModalShell>
   );

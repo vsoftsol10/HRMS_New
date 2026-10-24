@@ -438,14 +438,47 @@ export const extendInternship = async (req, res) => {
 
     const now = new Date().toISOString();
 
+    // Free internship that becomes paid on extension: the stipend starts the
+    // month after the old end date, so the earlier free months stay Rs.0.
+    const update = {
+      end_date: newEndDate,
+      monthly_stipend: stipend,
+      status: "Active",
+      updated_at: now,
+    };
+
+    if (Number(row.monthly_stipend) === 0 && stipend > 0) {
+      const [y, m] = String(row.end_date).slice(0, 10).split("-").map(Number);
+      const next = new Date(Date.UTC(y, m, 1));
+      const defaultStart = `${next.getUTCFullYear()}-${String(
+        next.getUTCMonth() + 1,
+      ).padStart(2, "0")}-01`;
+
+      // HR can choose the start month in the Extend form; it must be the 1st
+      // of a month between the old end month and the new end month.
+      const requested = blankToNull(body.stipend_start_month);
+      const oldEndMonth = `${String(row.end_date).slice(0, 7)}-01`;
+      const newEndMonth = `${newEndDate.slice(0, 7)}-01`;
+
+      if (requested === null) {
+        update.stipend_start_month = defaultStart;
+      } else if (
+        !isValidDate(requested) ||
+        !requested.endsWith("-01") ||
+        requested < oldEndMonth ||
+        requested > newEndMonth
+      ) {
+        return fail(res, "Select a valid stipend start month.", {
+          stipend_start_month: "Select a valid stipend start month.",
+        });
+      } else {
+        update.stipend_start_month = requested;
+      }
+    }
+
     const { error: internError } = await supabase
       .from("interns")
-      .update({
-        end_date: newEndDate,
-        monthly_stipend: stipend,
-        status: "Active",
-        updated_at: now,
-      })
+      .update(update)
       .eq("id", id);
 
     if (internError) throw internError;
@@ -462,6 +495,7 @@ export const extendInternship = async (req, res) => {
           .update({
             end_date: row.end_date,
             monthly_stipend: row.monthly_stipend,
+            stipend_start_month: row.stipend_start_month ?? null,
             status: row.status,
             updated_at: now,
           })

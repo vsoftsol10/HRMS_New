@@ -60,7 +60,8 @@ export default function InternAttendance() {
   const [page, setPage] = useState(1);
 
   const params = useMemo(
-    () => ({ month: toMonthKey(cursor.year, cursor.month) }),
+    // Backend (getEmployeeAttendance) expects month=1-12 and year=YYYY.
+    () => ({ month: cursor.month + 1, year: cursor.year }),
     [cursor],
   );
   const { data, loading, error, reload } = useFetch(internAttendanceServices, params);
@@ -74,10 +75,14 @@ export default function InternAttendance() {
   );
 
   const stats = data?.stats || {};
-  const present = (stats.presentDays || 0) + (stats.lateDays || 0) + (stats.halfDays || 0);
-  const absent = stats.absentDays || 0;
+  // Half Day counts as 0.5 (same rule as the backend attendance percentage).
+  const present =
+    (stats.presentDays || 0) + (stats.lateDays || 0) + (stats.halfDays || 0) * 0.5;
+  // Recorded Absent rows + working days with no record (display only).
+  const absent = (stats.absentDays || 0) + (data?.missedDates?.length || 0);
   const leave = stats.leaveDays || 0;
-  const workingDays = present + absent + leave;
+  // Working days of the whole month (weekly offs + holidays excluded) from backend.
+  const workingDays = data?.workingDays ?? 0;
 
   const rows = useMemo(() => {
     const records = Array.isArray(data?.attendance) ? data.attendance : [];
@@ -138,7 +143,7 @@ export default function InternAttendance() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `attendance-${params.month}.csv`;
+    link.download = `attendance-${toMonthKey(cursor.year, cursor.month)}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };

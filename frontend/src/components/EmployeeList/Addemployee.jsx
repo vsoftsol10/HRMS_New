@@ -162,13 +162,29 @@ useEffect(() => {
 
     try {
       if (employee) {
-        await update(employee.id, payload);
+        const updated = await update(employee.id, payload);
 
-        await alert({
-          title: "Success",
-          message: "Employee updated successfully.",
-          type: "success",
-        });
+        // The backend re-issues login credentials when the email address
+        // was changed (e.g. a wrong email was entered at creation).
+        if (updated?.credentialsReissued && updated.emailSent === false) {
+          await alert({
+            title: "Employee Updated - Email Not Sent",
+            message: `The employee was updated, but the login email could not be sent (${updated.emailError || "unknown reason"}). Ask them to use "Forgot password" on the login page.`,
+            type: "info",
+          });
+        } else if (updated?.credentialsReissued) {
+          await alert({
+            title: "Employee Updated Successfully",
+            message: "The email address was changed, so new login credentials have been sent to the updated email.",
+            type: "success",
+          });
+        } else {
+          await alert({
+            title: "Success",
+            message: "Employee updated successfully.",
+            type: "success",
+          });
+        }
       } else {
         const created = await create(payload);
 

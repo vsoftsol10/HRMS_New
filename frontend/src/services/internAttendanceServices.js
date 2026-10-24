@@ -1,6 +1,6 @@
 import * as crud from "./crudServices";
 
-// Same endpoint the employee portal uses; ?month=YYYY-MM picks the month.
+// Same endpoint the employee portal uses; ?month=1-12&year=YYYY picks the month.
 const RESOURCE = "attendance/employee";
 
 const internAttendanceServices = {

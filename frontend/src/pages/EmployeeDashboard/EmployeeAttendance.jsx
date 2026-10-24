@@ -85,12 +85,19 @@ export default function EmployeeAttendance() {
     year,
   });
 
-  console.log(data)
-
   const attendance = data.attendance || [];
   const stats = data.stats || {};
 
-  const present = stats.presentDays+stats.lateDays+stats.halfDays
+  const missedDates = data.missedDates || [];
+
+  // Half Day counts as 0.5 (same rule as the attendance percentage).
+  const present =
+    (stats.presentDays || 0) +
+    (stats.lateDays || 0) +
+    (stats.halfDays || 0) * 0.5;
+
+  // Recorded Absent rows + working days with no record (display only).
+  const absent = (stats.absentDays || 0) + missedDates.length;
 
   const attendanceData = attendance.map((item) => ({
     id: item.id,
@@ -131,7 +138,7 @@ export default function EmployeeAttendance() {
     },
     {
       title: "Absent Days",
-      value: stats.absentDays || 0,
+      value: absent,
       icon: UserX,
       iconBg: "bg-red-100",
       iconColor: "text-red-600",
@@ -235,6 +242,7 @@ export default function EmployeeAttendance() {
         {view === "calendar" && (
           <AttendanceCalendar
             attendance={attendance}
+            missedDates={missedDates}
             month={month}
             year={year}
             monthLabel={monthLabel}
@@ -259,7 +267,7 @@ export default function EmployeeAttendance() {
   );
 }
 
-function AttendanceCalendar({ attendance, month, year, monthLabel }) {
+function AttendanceCalendar({ attendance, missedDates = [], month, year, monthLabel }) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
 
   const firstDay = new Date(year, month, 1).getDay();
@@ -269,6 +277,11 @@ function AttendanceCalendar({ attendance, month, year, monthLabel }) {
   attendance.forEach((item) => {
     const date = item.attendance_date.split("T")[0];
     attendanceMap[date] = item.status;
+  });
+
+  // Working days with no record are shown as absent.
+  missedDates.forEach((date) => {
+    if (!attendanceMap[date]) attendanceMap[date] = "Absent";
   });
 
   const cells = [];
@@ -291,6 +304,9 @@ function AttendanceCalendar({ attendance, month, year, monthLabel }) {
 
       case "late":
         return "bg-yellow-100 text-yellow-700";
+
+      case "half day":
+        return "bg-blue-100 text-blue-700";
 
       case "leave":
         return "bg-orange-100 text-orange-700";
@@ -346,6 +362,7 @@ function AttendanceCalendar({ attendance, month, year, monthLabel }) {
         <Legend color="bg-green-500" title="Present" />
         <Legend color="bg-red-500" title="Absent" />
         <Legend color="bg-yellow-500" title="Late" />
+        <Legend color="bg-blue-500" title="Half Day" />
         <Legend color="bg-orange-500" title="Leave" />
       </div>
     </div>

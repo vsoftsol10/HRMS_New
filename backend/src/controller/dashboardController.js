@@ -2,6 +2,88 @@ import supabase from "../config/supabase.js";
 import { getToday, getMonthRange } from "../utils/dateUtils.js";
 import { safeErrorMessage } from "../utils/httpError.js";
 
+// Payroll rows that count as "processed" for the dashboard card.
+const PROCESSED_PAYROLL_STATUSES = ["Finalized", "Paid"];
+
+const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/*
+ * Payroll Status card: the latest payroll cycle (most recent payroll_month
+ * that has rows). Amounts are summed over processed (Finalized / Paid) rows
+ * only - Draft / Review numbers are recalculated at finalize time.
+ * Never throws: a failure here must not take the whole dashboard down.
+ */
+const getPayrollStatus = async () => {
+  try {
+    const { data: latest, error: latestError } = await supabase
+      .from("payroll")
+      .select("payroll_month")
+      .order("payroll_month", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (latestError) throw latestError;
+
+    if (!latest) {
+      return { month: null, processed: 0, total: 0, gross: 0, deductions: 0, net: 0 };
+    }
+
+    const { data: rows, error } = await supabase
+      .from("payroll")
+      .select("status, gross_salary, deductions, net_salary")
+      .eq("payroll_month", latest.payroll_month);
+
+    if (error) throw error;
+
+    const processedRows = (rows || []).filter((row) =>
+      PROCESSED_PAYROLL_STATUSES.includes(row.status),
+    );
+
+    const sum = (key) =>
+      round2(processedRows.reduce((total, row) => total + Number(row[key] || 0), 0));
+
+    return {
+      month: latest.payroll_month,
+      processed: processedRows.length,
+      total: (rows || []).length,
+      gross: sum("gross_salary"),
+      deductions: sum("deductions"),
+      net: sum("net_salary"),
+    };
+  } catch (err) {
+    console.error("dashboardController payrollStatus:", err);
+    return null;
+  }
+};
+
+/*
+ * announcements.posted_by stores employees.employee_code. The old query used
+ * select("*") with no join, so the dashboard always showed "Unknown" as the
+ * author. Attach { employees: { first_name } } (the shape the card reads).
+ */
+const attachAnnouncementPosters = async (announcements) => {
+  const list = announcements || [];
+  const codes = [...new Set(list.map((a) => a.posted_by).filter(Boolean))];
+
+  if (!codes.length) return list.map((a) => ({ ...a, employees: null }));
+
+  const { data: posters } = await supabase
+    .from("employees")
+    .select("employee_code, first_name")
+    .in("employee_code", codes);
+
+  const byCode = Object.fromEntries(
+    (posters || []).map((e) => [e.employee_code, e]),
+  );
+
+  return list.map((a) => ({
+    ...a,
+    employees: byCode[a.posted_by]
+      ? { first_name: byCode[a.posted_by].first_name }
+      : null,
+  }));
+};
+
 export const getDashboard = async (req, res) => {
   try {
     const today = getToday();
@@ -21,6 +103,8 @@ export const getDashboard = async (req, res) => {
       { data: upcomingHolidays },
       { data: recentAnnouncements },
       { data: recentLeaveRequests, error: recentLeaveRequestsError },
+      { data: companySettings },
+      payrollStatus,
     ] = await Promise.all([
       // Total employees
       supabase
@@ -76,6 +160,12 @@ export const getDashboard = async (req, res) => {
         )
         .eq("status", "Pending")
         .limit(3),
+
+      // Company name (singleton settings row)
+      supabase.from("company_settings").select("company_name").maybeSingle(),
+
+      // Latest payroll cycle summary
+      getPayrollStatus(),
     ]);
 
     /*
@@ -97,6 +187,7 @@ export const getDashboard = async (req, res) => {
 
     res.json({
       userName: employee?.first_name ?? "",
+      companyName: companySettings?.company_name ?? "",
       role: req.user.role,
       totalEmployees,
       presentToday,
@@ -105,8 +196,9 @@ export const getDashboard = async (req, res) => {
       totalDepartments,
       nextPayroll,
       upcomingHolidays,
-      recentAnnouncements,
+      recentAnnouncements: await attachAnnouncementPosters(recentAnnouncements),
       recentLeaveRequests,
+      payrollStatus,
     });
   } catch (err) {
     res.status(500).json({

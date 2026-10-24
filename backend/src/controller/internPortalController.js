@@ -3,6 +3,7 @@ import path from "path";
 
 import supabase from "../config/supabase.js";
 import { getToday } from "../utils/dateUtils.js";
+import { getMissedAttendanceDates } from "../utils/missedAttendance.js";
 import {
   blankToNull,
   handleError,
@@ -238,9 +239,18 @@ export const getDashboard = async (req, res) => {
     if (stipendError) throw stipendError;
     if (announcementError) throw announcementError;
 
-    const presentLike = ["Present", "Late", "Half Day"];
     const count = (rows, statuses) =>
       rows.filter((row) => statuses.includes(row.status)).length;
+    // Present + Late = 1 day, Half Day = 0.5 (same rule as the Attendance page).
+    const presentCount = (rows) =>
+      count(rows, ["Present", "Late"]) + count(rows, ["Half Day"]) * 0.5;
+
+    // Display only: working days with no attendance row count as absent.
+    const missedThisMonth = await getMissedAttendanceDates(
+      employeeId,
+      monthStart,
+      today,
+    );
 
     const stipendEnabled = hasStipend(intern);
     const schedule = stipendEnabled ? buildStipendSchedule(intern, paidRows) : [];
@@ -252,15 +262,16 @@ export const getDashboard = async (req, res) => {
       full_name: intern.full_name,
       designation: intern.designation,
       stats: {
-        present_days: count(allAttendance, presentLike),
-        absent_days: count(allAttendance, ["Absent"]),
+        // Same month as the Attendance page / summary tile so the numbers match.
+        present_days: presentCount(monthAttendance),
+        absent_days: count(monthAttendance, ["Absent"]) + missedThisMonth.length,
         stipend_status: stipendEnabled ? currentStipend?.status ?? "-" : null,
         tasks_uploaded: tasks.filter((task) => task.submitted_at).length,
       },
       attendance_summary: {
         month_label: monthLabel(monthStart),
-        present: count(monthAttendance, presentLike),
-        absent: count(monthAttendance, ["Absent"]),
+        present: presentCount(monthAttendance),
+        absent: count(monthAttendance, ["Absent"]) + missedThisMonth.length,
         leave: count(monthAttendance, ["Leave"]),
       },
       recent_activity: [

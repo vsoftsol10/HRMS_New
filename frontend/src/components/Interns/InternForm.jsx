@@ -136,6 +136,8 @@ export default function InternForm({ internId }) {
   const [loadingIntern, setLoadingIntern] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [lockedStatus, setLockedStatus] = useState("");
+  const [originalStipend, setOriginalStipend] = useState(null);
+  const [stipendStartChoice, setStipendStartChoice] = useState("");
 
   const today = formatLocalDate(new Date());
 
@@ -196,6 +198,12 @@ export default function InternForm({ internId }) {
             mentor_employee_id: intern.mentor_employee_id || "",
             status: intern.status,
           });
+          setOriginalStipend(Number(intern.monthly_stipend ?? 0));
+          setStipendStartChoice(
+            intern.stipend_start_month
+              ? String(intern.stipend_start_month).slice(0, 10)
+              : "",
+          );
         } else {
           const next = await internServices.getNextCodes();
           if (!cancelled) setCodes(next);
@@ -220,6 +228,60 @@ export default function InternForm({ internId }) {
   }, [internId, isEdit]);
 
   const clearError = (name) => setErrors((prev) => ({ ...prev, [name]: "" }));
+
+  // Editing a free (Rs.0) internship and raising the stipend: HR chooses the
+  // month the stipend starts, so earlier months stay free.
+  const isFreeToPaid =
+    isEdit && originalStipend === 0 && Number(form.monthly_stipend) > 0;
+
+  // Also shown for an intern that already has a stipend start month, so HR
+  // can see (and fix) when the paid stipend begins.
+  const showStipendStart =
+    isEdit &&
+    Number(form.monthly_stipend) > 0 &&
+    (isFreeToPaid || stipendStartChoice !== "");
+
+  const stipendStartOptions = [];
+  if (form.start_date && form.end_date) {
+    const monthOf = (value) => `${String(value).slice(0, 7)}-01`;
+    const nextOf = (key) => {
+      const [y, m] = key.split("-").map(Number);
+      const d = new Date(Date.UTC(y, m, 1));
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
+    };
+    const lastKey = monthOf(form.end_date);
+    for (
+      let key = monthOf(form.start_date);
+      key <= lastKey && stipendStartOptions.length < 36;
+      key = nextOf(key)
+    ) {
+      stipendStartOptions.push(key);
+    }
+  }
+
+  const defaultStipendStart = (() => {
+    if (!stipendStartOptions.length) return "";
+    const now = new Date();
+    const nextMonth = `${new Date(now.getFullYear(), now.getMonth() + 1, 1).getFullYear()}-${String(
+      new Date(now.getFullYear(), now.getMonth() + 1, 1).getMonth() + 1,
+    ).padStart(2, "0")}-01`;
+    return (
+      stipendStartOptions.find((key) => key >= nextMonth) ||
+      stipendStartOptions[stipendStartOptions.length - 1]
+    );
+  })();
+
+  const stipendStart = stipendStartOptions.includes(stipendStartChoice)
+    ? stipendStartChoice
+    : defaultStipendStart;
+
+  const monthOptionLabel = (key) => {
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString("en-IN", {
+      month: "long",
+      year: "numeric",
+    });
+  };
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -317,6 +379,7 @@ export default function InternForm({ internId }) {
       designation: form.designation.trim(),
       address: form.address.trim(),
       mentor_employee_id: form.mentor_employee_id || "",
+      ...(showStipendStart && stipendStart ? { stipend_start_month: stipendStart } : {}),
     };
 
     try {
@@ -548,6 +611,27 @@ export default function InternForm({ internId }) {
               onChange={handleChange}
               error={errors.monthly_stipend}
             />
+            {showStipendStart && (
+              <div>
+                <label className="block mb-2 font-medium">
+                  Stipend Starts From *
+                </label>
+                <select
+                  value={stipendStart}
+                  onChange={(event) => setStipendStartChoice(event.target.value)}
+                  className="w-full border border-gray-400 rounded-lg px-3 py-3 outline-none shadow-sm bg-white focus:ring-2 focus:ring-yellow-400 hover:border-yellow-300 cursor-pointer"
+                >
+                  {stipendStartOptions.map((key) => (
+                    <option key={key} value={key}>
+                      {monthOptionLabel(key)}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-sm text-gray-500 mt-1">
+                  Months before this stay free (₹0).
+                </p>
+              </div>
+            )}
             <CustomSelect
               label="Supervisor / Mentor"
               options={mentorOptions}
